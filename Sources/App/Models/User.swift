@@ -57,6 +57,7 @@ final class User: Model, HBAuthenticatable {
         self.productId = productId
         self.subscriptionStatus = status.rawValue
         self.jwtToken = token
+        self.blockedUntil = nil
     }
 }
 

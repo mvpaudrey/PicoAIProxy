@@ -46,15 +46,16 @@ extension HBApplication {
         self.fluent.migrations.add(UserRequestMigration())
         try await self.fluent.migrate()
         
-        // 5. Fetch JWT private key from environment and set up JWT Signers
-        guard let jwtKey = HBEnvironment().get("JWTPrivateKey"),
-              !jwtKey.isEmpty else {
-            self.logger.error("JWTPrivateKey environment variable must be set")
-            throw HBHTTPError(.internalServerError) 
-        }
+        // 5. Fetch JWT private key from environment and set up JWT Signers.
+        //    Optional: anonymous (free) users work without it; premium /appstore auth requires it.
         let jwtAuthenticator = JWTAuthenticator()
         let jwtLocalSignerKid = JWKIdentifier("_aiproxy_local_")
-        jwtAuthenticator.useSigner(.hs256(key: jwtKey), kid: jwtLocalSignerKid)
+        if let jwtKey = HBEnvironment().get("JWTPrivateKey"), !jwtKey.isEmpty {
+            jwtAuthenticator.useSigner(.hs256(key: jwtKey), kid: jwtLocalSignerKid)
+            self.logger.info("JWT signing enabled — premium authentication available")
+        } else {
+            self.logger.warning("JWTPrivateKey not set — anonymous access only, premium /appstore auth disabled")
+        }
 
         // 6. Add AppStoreController routes to verify client's purchase and send JWT token to client
         let appStoreController = AppStoreController(jwtSigners: jwtAuthenticator.jwtSigners, kid: jwtLocalSignerKid)

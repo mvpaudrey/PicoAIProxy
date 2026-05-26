@@ -70,6 +70,10 @@ extension LLMModel {
         "claude-3-opus-20240229",
         "claude-3-sonnet-20240229",
         "claude-3-haiku-20240307",
+        // Claude 4.x
+        "claude-opus-4-7",
+        "claude-sonnet-4-6",
+        "claude-haiku-4-5-20251001",
     ]
     // TODO: fetch models from API so we're always up to date
     //  https://api.groq.com/openai/v1/models

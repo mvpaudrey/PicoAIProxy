@@ -52,12 +52,19 @@ struct JWTAuthenticator: HBAsyncAuthenticator {
     }
 
     func authenticate(request: HBRequest) async throws -> User? {
-        
-        // 1. Get JWT token from bearer authorization header
-        //    If no token is present, return unauthorized error
+
+        // 1. Get JWT token from bearer authorization header.
+        //    If no token is present, treat as anonymous: find or create the shared anon user.
         guard let jwtToken = request.authBearer?.token else {
-            request.logger.error("No jwtToken found")
-            throw HBHTTPError(.unauthorized)
+            request.logger.info("No JWT token — anonymous request")
+            if let anonUser = try await User.query(on: request.db)
+                .filter(\.$appAccountToken == nil)
+                .first() {
+                return anonUser
+            }
+            let anonUser = User(appAccountToken: nil, environment: "Production", productId: "", status: .expired)
+            try await anonUser.save(on: request.db)
+            return anonUser
         }
         
         // 2. If passthrough is enabled, and OpenAI key and org is found in headers

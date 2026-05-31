@@ -23,20 +23,47 @@ struct MessageRouterMiddleware: HBAsyncMiddleware {
             throw HBHTTPError(.badRequest)
         }
         
-        // 2. Find model in body. Default to OpenAI if body isn't a chat (but e.g. an embedding)
+        // 2. Rewrite model and max_tokens from env vars, then route to the right provider
         var headers = request.headers
         var uri = request.uri.string
-        if let model = LLMModel.fetchModel(from: data) {
+
+        let enforcedModel    = HBEnvironment().get("MODEL")
+        let enforcedMaxTokens = HBEnvironment().get("MAX_TOKENS").flatMap(Int.init)
+
+        // Parse body as a mutable dictionary so we can override fields
+        var bodyDict = (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
+
+        let modelName: String
+        if let m = enforcedModel, !m.isEmpty {
+            modelName = m
+            bodyDict["model"] = m
+        } else if let m = bodyDict["model"] as? String {
+            modelName = m
+        } else {
+            modelName = ""
+        }
+
+        if let cap = enforcedMaxTokens {
+            let requested = bodyDict["max_tokens"] as? Int ?? Int.max
+            bodyDict["max_tokens"] = min(requested, cap)
+        }
+
+        if let model = LLMModel.fetch(model: modelName) {
             request.logger.info("Rerouting \(model.name) to \(model.provider.name)")
             headers.replaceOrAdd(name: "model", value: model.name)
             if !model.proxy().location.isEmpty {
                 uri = model.proxy().location
             }
         }
-        
-        // 3. Update header
+
+        // Re-encode the (possibly modified) body
+        let newData = (try? JSONSerialization.data(withJSONObject: bodyDict)) ?? data
+        var newBuffer = ByteBuffer()
+        newBuffer.writeBytes(newData)
+
+        // 3. Update header and body
         let head = HTTPRequestHead(version: request.version, method: request.method, uri: uri, headers: headers)
-        let convertedRequest = HBRequest(head: head, body: request.body, application: request.application, context: request.context)
+        let convertedRequest = HBRequest(head: head, body: .byteBuffer(newBuffer), application: request.application, context: request.context)
         
         let response = try await next.respond(to: convertedRequest)
 //        print("---")

@@ -66,7 +66,15 @@ extension HBApplication {
         
         // 8. Add rate limiter
         self.middleware.add(RateLimiterMiddleware())
-        
+
+        // 8b. Enforce lifetime free-tier quota via Upstash (no-op when env vars are absent)
+        if let quotaService = UpstashQuotaService() {
+            self.middleware.add(FreeTierQuotaMiddleware(quotaService: quotaService))
+            self.logger.info("Free-tier quota middleware enabled (limit: \(quotaService.freeLimit))")
+        } else {
+            self.logger.warning("UPSTASH_REDIS_REST_URL/TOKEN not set — free-tier quota middleware disabled")
+        }
+
         // 9. Route message to right provider
         self.middleware.add(MessageRouterMiddleware())
         

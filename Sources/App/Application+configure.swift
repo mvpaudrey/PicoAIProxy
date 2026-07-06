@@ -82,7 +82,10 @@ extension HBApplication {
 
         // 9. Route message to right provider
         self.middleware.add(MessageRouterMiddleware())
-        
+
+        // 9b. Block age-inappropriate content before it reaches the LLM (13+ compliance)
+        self.middleware.add(ContentBlocklistMiddleware())
+
         // 10. Add OpenAI API key middleware. This middleware will add the OpenAI org and API key in the header of the request
         self.middleware.add(APIKeyMiddleware())
         
